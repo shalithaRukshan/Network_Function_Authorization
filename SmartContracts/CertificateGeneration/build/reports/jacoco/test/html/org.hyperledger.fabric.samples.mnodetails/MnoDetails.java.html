@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MnoDetails.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">basic</a> &gt; <a href="index.source.html" class="el_package">org.hyperledger.fabric.samples.mnodetails</a> &gt; <span class="el_source">MnoDetails.java</span></div><h1>MnoDetails.java</h1><pre class="source lang-java linenums">package org.hyperledger.fabric.samples.mnodetails;
+
+import com.owlike.genson.Genson;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.hyperledger.fabric.contract.Context;
+import org.hyperledger.fabric.contract.ContractInterface;
+import org.hyperledger.fabric.contract.annotation.Contact;
+import org.hyperledger.fabric.contract.annotation.Contract;
+import org.hyperledger.fabric.contract.annotation.Default;
+import org.hyperledger.fabric.contract.annotation.Info;
+import org.hyperledger.fabric.contract.annotation.License;
+import org.hyperledger.fabric.contract.annotation.Transaction;
+import org.hyperledger.fabric.shim.ChaincodeException;
+import org.hyperledger.fabric.shim.ChaincodeStub;
+import org.hyperledger.fabric.shim.ledger.KeyValue;
+import org.hyperledger.fabric.shim.ledger.QueryResultsIterator;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Contract(
+        name = &quot;basic&quot;,
+        info = @Info(
+                title = &quot;Mno details&quot;,
+                description = &quot;The hyperlegendary asset transfer&quot;,
+                version = &quot;0.0.1-SNAPSHOT&quot;,
+                license = @License(
+                        name = &quot;Apache 2.0 License&quot;,
+                        url = &quot;http://www.apache.org/licenses/LICENSE-2.0.html&quot;),
+                contact = @Contact(
+                        email = &quot;a.transfer@example.com&quot;,
+                        name = &quot;Adrian Transfer&quot;,
+                        url = &quot;https://hyperledger.example.com&quot;)))
+@Default
+<span class="fc" id="L53">public final class MnoDetails implements ContractInterface {</span>
+
+<span class="fc" id="L55">    private final Logger logger = LogManager.getLogger(MnoDetails.class);</span>
+<span class="fc" id="L56">    private final Genson genson = new Genson();</span>
+
+    private static final int MAX_ALLOWED_TIME = 1000000;
+    private static final String CERTIFICATE_REQUEST_PREFIX = &quot;CR_&quot;;
+    private static final String DOS_RESPONSE_PREFIX = &quot;DR_&quot;;
+    private static final String OTHER_MNO_RESPONSE_PREFIX = &quot;OR_&quot;;
+    private static final String MNO_PREFIX = &quot;MNO_&quot;;
+    private static final String CERTIFICATE_PREFIX = &quot;C&quot;;
+    private static final int DOS_PUZZLE = 4;
+
+<span class="fc" id="L66">    private enum CertificateErrors {</span>
+<span class="fc" id="L67">        MNO_NOT_FOUND,</span>
+<span class="fc" id="L68">        MNO_ALREADY_EXIST,</span>
+<span class="fc" id="L69">        INVALID_CERTIFICATE_REQUEST,</span>
+<span class="fc" id="L70">        INVALID_SIGNATURE,</span>
+<span class="fc" id="L71">        FRESHNESS_EXPIRED,</span>
+<span class="fc" id="L72">        IDENTITY_ISSUE</span>
+    }
+
+    @Transaction(intent = Transaction.TYPE.SUBMIT)
+    public void InitLedger(final Context ctx) {
+<span class="fc" id="L77">        ChaincodeStub stub = ctx.getStub();</span>
+<span class="fc" id="L78">        logger.info(&quot;initializing the ledger&quot;);</span>
+<span class="fc" id="L79">        CreateMno(ctx, &quot;mno1&quot;, &quot;mno1&quot;, &quot;http://localhost:9000/api/mno&quot;);</span>
+<span class="fc" id="L80">        CreateMno(ctx, &quot;mno2&quot;, &quot;mno2&quot;, &quot;http://localhost:9000/api/mno&quot;);</span>
+<span class="fc" id="L81">        CreateMno(ctx, &quot;mno3&quot;, &quot;mno3&quot;, &quot;http://localhost:9000/api/mno&quot;);</span>
+<span class="fc" id="L82">        CreateMno(ctx, &quot;mno4&quot;, &quot;mno4&quot;, &quot;http://localhost:9000/api/mno&quot;);</span>
+<span class="fc" id="L83">        CreateMno(ctx, &quot;mno5&quot;, &quot;mno5&quot;, &quot;http://localhost:9000/api/mno&quot;);</span>
+<span class="fc" id="L84">        CreateMno(ctx, &quot;mno6&quot;, &quot;mno6&quot;, &quot;http://localhost:9000/api/mno&quot;);</span>
+
+<span class="fc" id="L86">    }</span>
+
+    /**
+     * Creates a new MNO on the ledger.
+     *
+     * @param ctx      the transaction context
+     * @param mnoId    the ID of the new asset
+     * @param mnoName  the color of the new asset
+     * @param endpoint the size for the new asset
+     * @return the created asset
+     */
+    @Transaction(intent = Transaction.TYPE.SUBMIT)
+    public Mno CreateMno(final Context ctx, final String mnoId, final String mnoName,
+                         final String endpoint) {
+<span class="fc" id="L100">        ChaincodeStub stub = ctx.getStub();</span>
+
+<span class="fc bfc" id="L102" title="All 2 branches covered.">        if (MnoExists(ctx, mnoId)) {</span>
+<span class="fc" id="L103">            String errorMessage = String.format(&quot;Mno %s already exists&quot;, mnoId);</span>
+<span class="fc" id="L104">            System.out.println(errorMessage);</span>
+<span class="fc" id="L105">            throw new ChaincodeException(errorMessage, CertificateErrors.MNO_ALREADY_EXIST.toString());</span>
+        }
+
+<span class="fc" id="L108">        Mno mno = new Mno(mnoId, mnoName, endpoint);</span>
+        //Use Genson to convert the Asset into string, sort it alphabetically and serialize it into a json string
+<span class="fc" id="L110">        String sortedJson = genson.serialize(mno);</span>
+<span class="fc" id="L111">        stub.putStringState(mnoId, sortedJson);</span>
+
+<span class="fc" id="L113">        return mno;</span>
+    }
+
+    /**
+     * Retrieves an mno with the specified ID from the ledger.
+     *
+     * @param ctx     the transaction context
+     * @param request the certificate request
+     * @return the asset found on the ledger if there was one
+     */
+    @Transaction(intent = Transaction.TYPE.SUBMIT)
+    public String CertRequest(final Context ctx, final String request) {
+<span class="nc" id="L125">        ChaincodeStub stub = ctx.getStub();</span>
+<span class="nc" id="L126">        System.out.println(&quot;Request came for generating certificate &quot; + request);</span>
+<span class="nc" id="L127">        String[] requestParts = request.split(&quot;\\|\\|&quot;);</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if (requestParts.length != 6) {</span>
+<span class="nc" id="L129">            System.out.println(&quot;Invalid request&quot;);</span>
+<span class="nc" id="L130">            throw new ChaincodeException(&quot;invalid request&quot;, CertificateErrors.INVALID_CERTIFICATE_REQUEST.toString());</span>
+        }
+
+<span class="nc" id="L133">        String id = requestParts[0];</span>
+<span class="nc" id="L134">        String sessionId = requestParts[1];</span>
+<span class="nc" id="L135">        String initialPoint = requestParts[2];</span>
+<span class="nc" id="L136">        String certInfo = requestParts[3];</span>
+<span class="nc" id="L137">        long reqTimestamp = Long.parseLong(requestParts[4]);</span>
+<span class="nc" id="L138">        String signature = requestParts[5];</span>
+<span class="nc" id="L139">        BigInteger sigInt = new BigInteger(signature);</span>
+<span class="nc" id="L140">        String data = id + &quot;||&quot; + sessionId + &quot;||&quot; + initialPoint + &quot;||&quot; + certInfo + &quot;||&quot; + reqTimestamp;</span>
+<span class="nc" id="L141">        System.out.println(data);</span>
+
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        if (!validateSignature(data, signature, ctx.getClientIdentity().getX509Certificate().getPublicKey())) {</span>
+<span class="nc" id="L144">            logger.error(&quot;Invalid signature&quot;);</span>
+<span class="nc" id="L145">            throw new ChaincodeException(&quot;Invalid signature&quot;, CertificateErrors.INVALID_SIGNATURE.toString());</span>
+        }
+
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        if (getTimestamp() - MAX_ALLOWED_TIME &lt; reqTimestamp) {</span>
+<span class="nc" id="L149">            logger.error(&quot;Freshness expired&quot;);</span>
+<span class="nc" id="L150">            throw new ChaincodeException(&quot;Freshness expired&quot;, CertificateErrors.FRESHNESS_EXPIRED.toString());</span>
+        }
+
+<span class="nc" id="L153">        String uId = CERTIFICATE_REQUEST_PREFIX + sessionId;</span>
+
+<span class="nc" id="L155">        String response = &quot;&quot;;</span>
+<span class="nc" id="L156">        String secondRandom = getAlphaNumericString(10);</span>
+
+<span class="nc" id="L158">        response = sessionId + &quot;||&quot; + secondRandom + &quot;||&quot; + getTimestamp() + &quot;||&quot; + DOS_PUZZLE;</span>
+
+<span class="nc" id="L160">        BigInteger bg = new BigInteger(response.getBytes());</span>
+<span class="nc" id="L161">        System.out.println(response);</span>
+<span class="nc" id="L162">        Cipher cipher = null;</span>
+<span class="nc" id="L163">        BigInteger encResp = null;</span>
+        try {
+<span class="nc" id="L165">            cipher = Cipher.getInstance(&quot;ECIES&quot;, &quot;BC&quot;);</span>
+
+<span class="nc" id="L167">            cipher.init(Cipher.ENCRYPT_MODE, ctx.getClientIdentity().getX509Certificate().getPublicKey());</span>
+<span class="nc" id="L168">            byte[] encryptedMessage = cipher.doFinal(bg.toByteArray());</span>
+<span class="nc" id="L169">            encResp = new BigInteger(encryptedMessage);</span>
+<span class="nc" id="L170">            logger.info(&quot;Response for client &quot; + encResp);</span>
+<span class="nc" id="L171">        } catch (NoSuchAlgorithmException | NoSuchProviderException</span>
+                | NoSuchPaddingException | IllegalBlockSizeException
+                | BadPaddingException | InvalidKeyException e) {
+<span class="nc" id="L174">            logger.error(e.getMessage());</span>
+<span class="nc" id="L175">            throw new ChaincodeException(e.getLocalizedMessage(), CertificateErrors.IDENTITY_ISSUE.toString());</span>
+<span class="nc" id="L176">        }</span>
+<span class="nc" id="L177">        stub.putStringState(uId, request);</span>
+
+<span class="nc" id="L179">        return String.valueOf(encResp);</span>
+    }
+
+    private void calReputationScore(final Context ctx) {
+<span class="nc" id="L183">        ChaincodeStub stub = ctx.getStub();</span>
+        int noOfIssuedCerts;
+        int noOfRevokedCerts;
+        int noOfContributedCerts;
+
+<span class="nc" id="L188">        List&lt;Certificate&gt; certList = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L189">        Map&lt;String, Float&gt; repCal = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L190">        QueryResultsIterator&lt;KeyValue&gt; results = stub.getStateByPartialCompositeKey(CERTIFICATE_PREFIX);</span>
+
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        for (KeyValue result : results) {</span>
+<span class="nc" id="L193">            Certificate mno = genson.deserialize(result.getStringValue(), Certificate.class);</span>
+<span class="nc" id="L194">            System.out.println(mno);</span>
+<span class="nc" id="L195">            certList.add(mno);</span>
+<span class="nc" id="L196">        }</span>
+
+
+<span class="nc" id="L199">    }</span>
+
+
+    private String getAlphaNumericString(final int n) {
+
+<span class="nc" id="L204">        String alphaNumericString = &quot;ABCDEFGHIJKLMNOPQRSTUVWXYZ&quot;</span>
+                + &quot;0123456789&quot;
+                + &quot;abcdefghijklmnopqrstuvxyz&quot;;
+
+<span class="nc" id="L208">        StringBuilder sb = new StringBuilder(n);</span>
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        for (int i = 0; i &lt; n; i++) {</span>
+<span class="nc" id="L211">            int index</span>
+<span class="nc" id="L212">                    = (int) (alphaNumericString.length()</span>
+<span class="nc" id="L213">                    * Math.random());</span>
+<span class="nc" id="L214">            sb.append(alphaNumericString</span>
+<span class="nc" id="L215">                    .charAt(index));</span>
+        }
+<span class="nc" id="L217">        return sb.toString();</span>
+    }
+
+    private long getTimestamp() {
+<span class="nc" id="L221">        Timestamp ts = Timestamp.from(Instant.now());</span>
+<span class="nc" id="L222">        return ts.getTime();</span>
+    }
+
+    private boolean validateSignature(final String data, final String signature, final PublicKey publicKey) {
+<span class="nc" id="L226">        boolean isValid = false;</span>
+        try {
+<span class="nc" id="L228">            String hash = DigestUtils.sha256Hex(data);</span>
+<span class="nc" id="L229">            Signature sig = Signature.getInstance(&quot;ECDSA&quot;);</span>
+<span class="nc" id="L230">            sig.initVerify(publicKey);</span>
+<span class="nc" id="L231">            sig.update(hash.getBytes(StandardCharsets.UTF_8));</span>
+<span class="nc" id="L232">            isValid = sig.verify(signature.getBytes(StandardCharsets.UTF_8));</span>
+<span class="nc" id="L233">        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {</span>
+<span class="nc" id="L234">            System.out.println(e.getLocalizedMessage());</span>
+<span class="nc" id="L235">        }</span>
+<span class="nc" id="L236">        return isValid;</span>
+
+    }
+
+    /**
+     * Retrieves an mno with the specified ID from the ledger.
+     *
+     * @param ctx   the transaction context
+     * @param mnoId the ID of the asset
+     * @return the asset found on the ledger if there was one
+     */
+    @Transaction(intent = Transaction.TYPE.EVALUATE)
+    public Mno ReadMno(final Context ctx, final String mnoId) {
+<span class="fc" id="L249">        ChaincodeStub stub = ctx.getStub();</span>
+<span class="fc" id="L250">        String mnoJSON = stub.getStringState(mnoId);</span>
+
+<span class="pc bpc" id="L252" title="1 of 4 branches missed.">        if (mnoJSON == null || mnoJSON.isEmpty()) {</span>
+<span class="fc" id="L253">            String errorMessage = String.format(&quot;Mno %s does not exist&quot;, mnoId);</span>
+<span class="fc" id="L254">            System.out.println(errorMessage);</span>
+<span class="fc" id="L255">            throw new ChaincodeException(errorMessage, CertificateErrors.MNO_NOT_FOUND.toString());</span>
+        }
+
+<span class="fc" id="L258">        Mno mno = genson.deserialize(mnoJSON, Mno.class);</span>
+<span class="fc" id="L259">        return mno;</span>
+    }
+
+    /**
+     * Updates the properties of an asset on the ledger.
+     *
+     * @param ctx      the transaction context
+     * @param mnoId    the ID of the asset being updated
+     * @param mnoName  the color of the asset being updated
+     * @param endpoint the size of the asset being updated
+     * @return the transferred asset
+     */
+    @Transaction(intent = Transaction.TYPE.SUBMIT)
+    public Mno UpdateMno(final Context ctx, final String mnoId, final String mnoName,
+                         final String endpoint) {
+<span class="fc" id="L274">        ChaincodeStub stub = ctx.getStub();</span>
+
+<span class="pc bpc" id="L276" title="1 of 2 branches missed.">        if (!MnoExists(ctx, mnoId)) {</span>
+<span class="nc" id="L277">            String errorMessage = String.format(&quot;Mno %s does not exist&quot;, mnoId);</span>
+<span class="nc" id="L278">            System.out.println(errorMessage);</span>
+<span class="nc" id="L279">            throw new ChaincodeException(errorMessage, CertificateErrors.MNO_NOT_FOUND.toString());</span>
+        }
+
+<span class="fc" id="L282">        Mno newMno = new Mno(mnoId, mnoName, endpoint);</span>
+        //Use Genson to convert the Asset into string, sort it alphabetically and serialize it into a json string
+<span class="fc" id="L284">        String sortedJson = genson.serialize(newMno);</span>
+<span class="fc" id="L285">        stub.putStringState(mnoId, sortedJson);</span>
+<span class="fc" id="L286">        return newMno;</span>
+    }
+
+    /**
+     * Deletes asset on the ledger.
+     *
+     * @param ctx   the transaction context
+     * @param mnoId the ID of the asset being deleted
+     */
+    @Transaction(intent = Transaction.TYPE.SUBMIT)
+    public void DeleteMno(final Context ctx, final String mnoId) {
+<span class="fc" id="L297">        ChaincodeStub stub = ctx.getStub();</span>
+
+<span class="pc bpc" id="L299" title="1 of 2 branches missed.">        if (!MnoExists(ctx, mnoId)) {</span>
+<span class="fc" id="L300">            String errorMessage = String.format(&quot;Mno %s does not exist&quot;, mnoId);</span>
+<span class="fc" id="L301">            System.out.println(errorMessage);</span>
+<span class="fc" id="L302">            throw new ChaincodeException(errorMessage, CertificateErrors.MNO_NOT_FOUND.toString());</span>
+        }
+
+<span class="nc" id="L305">        stub.delState(mnoId);</span>
+<span class="nc" id="L306">    }</span>
+
+    /**
+     * Checks the existence of the asset on the ledger
+     *
+     * @param ctx   the transaction context
+     * @param mnoId the ID of the asset
+     * @return boolean indicating the existence of the asset
+     */
+    @Transaction(intent = Transaction.TYPE.EVALUATE)
+    public boolean MnoExists(final Context ctx, final String mnoId) {
+<span class="fc" id="L317">        ChaincodeStub stub = ctx.getStub();</span>
+<span class="fc" id="L318">        String mnoJson = stub.getStringState(mnoId);</span>
+
+<span class="fc bfc" id="L320" title="All 4 branches covered.">        return (mnoJson != null &amp;&amp; !mnoJson.isEmpty());</span>
+    }
+
+//    /**
+//     * Changes the owner of a asset on the ledger.
+//     *
+//     * @param ctx      the transaction context
+//     * @param mnoId  the ID of the asset being transferred
+//     * @param mnoName the new owner
+//     * @return the old owner
+//     */
+//    @Transaction(intent = Transaction.TYPE.SUBMIT)
+//    public String TransferAsset(final Context ctx, final String assetID, final String newOwner) {
+//        ChaincodeStub stub = ctx.getStub();
+//        String assetJSON = stub.getStringState(assetID);
+//
+//        if (assetJSON == null || assetJSON.isEmpty()) {
+//            String errorMessage = String.format(&quot;Asset %s does not exist&quot;, assetID);
+//            System.out.println(errorMessage);
+//            throw new ChaincodeException(errorMessage, AssetTransfer.AssetTransferErrors.ASSET_NOT_FOUND.toString());
+//        }
+//
+//        Asset asset = genson.deserialize(assetJSON, Asset.class);
+//
+//        Asset newAsset = new Asset(asset.getAssetID(), asset.getColor(), asset.getSize(), newOwner, asset.getAppraisedValue());
+//        //Use a Genson to conver the Asset into string, sort it alphabetically and serialize it into a json string
+//        String sortedJson = genson.serialize(newAsset);
+//        stub.putStringState(assetID, sortedJson);
+//
+//        return asset.getOwner();
+//    }
+
+    /**
+     * Retrieves all assets from the ledger.
+     *
+     * @param ctx the transaction context
+     * @return array of assets found on the ledger
+     */
+    @Transaction(intent = Transaction.TYPE.EVALUATE)
+    public String GetAllMNOs(final Context ctx) {
+<span class="fc" id="L360">        ChaincodeStub stub = ctx.getStub();</span>
+<span class="fc" id="L361">        List&lt;Mno&gt; queryResults = new ArrayList&lt;Mno&gt;();</span>
+<span class="fc" id="L362">        System.out.println(&quot;Reading all info about MNOs&quot;);</span>
+        // To retrieve all assets from the ledger use getStateByRange with empty startKey &amp; endKey.
+        // Giving empty startKey &amp; endKey is interpreted as all the keys from beginning to end.
+        // As another example, if you use startKey = 'asset0', endKey = 'asset9' ,
+        // then getStateByRange will retrieve asset with keys between asset0 (inclusive) and asset9 (exclusive) in lexical order.
+<span class="fc" id="L367">        QueryResultsIterator&lt;KeyValue&gt; results = stub.getStateByRange(&quot;&quot;, &quot;&quot;);</span>
+
+<span class="fc bfc" id="L369" title="All 2 branches covered.">        for (KeyValue result : results) {</span>
+<span class="fc" id="L370">            Mno mno = genson.deserialize(result.getStringValue(), Mno.class);</span>
+<span class="fc" id="L371">            System.out.println(mno);</span>
+<span class="fc" id="L372">            queryResults.add(mno);</span>
+<span class="fc" id="L373">        }</span>
+
+<span class="fc" id="L375">        final String response = genson.serialize(queryResults);</span>
+
+<span class="fc" id="L377">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

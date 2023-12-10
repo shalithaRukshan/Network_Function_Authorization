@@ -1,0 +1,154 @@
+{
+	"info": {
+		"_postman_id": "79988c77-de6c-4a9a-ae4a-4f0e7a4b32cf",
+		"name": "SampleRecord",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "GetSampleRecord",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4000/channels/mychannel/chaincodes/samplecontract?fcn=getSampleRecord&chainCodeName=samplecontract&channelName=mychannel&args=[\"Key1\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"channels",
+						"mychannel",
+						"chaincodes",
+						"samplecontract"
+					],
+					"query": [
+						{
+							"key": "fcn",
+							"value": "getSampleRecord"
+						},
+						{
+							"key": "chainCodeName",
+							"value": "samplecontract"
+						},
+						{
+							"key": "channelName",
+							"value": "mychannel"
+						},
+						{
+							"key": "args",
+							"value": "[\"Key1\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "RegisterUser",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"username\":\"Test\",\r\n    \"orgName\":\"Org1\",\r\n    \"role\": \"admin\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/users",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"users"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "CreateSampleRecord",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"fcn\": \"createSampleRecord\",\r\n    \"peer\": [\"peer0.org1.digiblocks.com\", \"peer0.org2.digiblocks.com\"],\r\n    \"chaincodeName\":\"samplecontract\",\r\n    \"channelName\" : \"mychannel\",\r\n    \"args\":[\"Key1\", \"Value\"]\r\n    \r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4000/channels/mychannel/chaincodes/samplecontract",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4000",
+					"path": [
+						"channels",
+						"mychannel",
+						"chaincodes",
+						"samplecontract"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "token",
+			"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MzIyMDc1MTQsInVzZXJuYW1lIjoiVGVzdCIsIm9yZ05hbWUiOiJPcmcxIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjMyMTcxNTE0fQ.sgppC3fkB8_-2OWzBvfF57gcEN3c_rRXBfyEh346BZc"
+		}
+	]
+}

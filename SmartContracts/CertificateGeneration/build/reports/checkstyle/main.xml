@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="8.21">
+<file name="D:\learning\hyperledger\HLF2-Project-Repo-V2.1-1.1\hyperledger\src\main\java\org\hyperledger\fabric\samples\mnodetails\Certificate.java">
+</file>
+<file name="D:\learning\hyperledger\HLF2-Project-Repo-V2.1-1.1\hyperledger\src\main\java\org\hyperledger\fabric\samples\mnodetails\Mno.java">
+</file>
+<file name="D:\learning\hyperledger\HLF2-Project-Repo-V2.1-1.1\hyperledger\src\main\java\org\hyperledger\fabric\samples\mnodetails\MnoDetails.java">
+</file>
+</checkstyle>
